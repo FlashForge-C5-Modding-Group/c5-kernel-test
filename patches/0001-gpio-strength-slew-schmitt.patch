@@ -1,0 +1,181 @@
+--- a/arch/mips/xburst2/soc-x2600/gpio.c	2026-11-25 05:29:14.201923975 -0500
++++ b/arch/mips/xburst2/soc-x2600/gpio.c	2026-11-25 05:29:14.222868914 -0500
+@@ -30,6 +30,25 @@
+ #define PXPDS      0x94   /* Port PULL-DOWN State Set Register */
+ #define PXPDC      0x98   /* Port PULL-DOWN State Clear Register */
+ 
++#define PXDS0      0xA0   /* PORT Drive Strength State Register0*/
++#define PXDS0S     0xA4   /* PORT Drive Strength State set Register0*/
++#define PXDS0C     0xA8   /* PORT Drive Strength State clear Register0*/
++#define PXDS1      0xB0   /* PORT Drive Strength State Register1*/
++#define PXDS1S     0xB4   /* PORT Drive Strength State set Register1*/
++#define PXDS1C     0xB8   /* PORT Drive Strength State clear Register1*/
++#define PXDS2      0xC0   /* PORT Drive Strength State Register2*/
++#define PXDS2S     0xC4   /* PORT Drive Strength State set Register2*/
++#define PXDS2C     0xC8   /* PORT Drive Strength State clear Register2*/
++#define PXSR       0xD0   /* PORT Slew Rate Register */
++#define PXSRS      0xD4   /* PORT Slew Rate Register Set */
++#define PXSRC      0xD8   /* PORT Slew Rate Register Clear */
++#define PXSMT      0xE0   /* PORT Schmitt Trigger Register */
++#define PXSMTS     0xE4   /* PORT Schmitt Trigger Register Set */
++#define PXSMTC     0xE8   /* PORT Schmitt Trigger Register Clear */
++#define PXSMT1     0x100  /* PORTE Schmitt Trigger Register1 */
++#define PXSMT1S    0x104  /* PORTE Schmitt Trigger Register1 Set */
++#define PXSMT1C    0x108  /* PORTE Schmitt Trigger Register1 Clear */
++
+ #define PXSPCFG    0x200
+ #define PXSPSEL0   0x204
+ #define PXMPCFG0   0x208
+@@ -241,6 +260,152 @@
+ }
+ EXPORT_SYMBOL(jzgpio_set_func);
+ 
++/* Drive strength, slew rate and Schmitt trigger, as in Ingenic kernel-6.6 (FlashForge's
++ * soc_gpio.ko imports them) */
++int jzgpio_set_strength(int port, int value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	if (value & BIT(0)) {
++		gpio_write(port, PXDS0S, BIT(pin));
++	} else {
++		gpio_write(port, PXDS0C, BIT(pin));
++	}
++
++	if (value & BIT(1)) {
++		gpio_write(port, PXDS1S, BIT(pin));
++	} else {
++		gpio_write(port, PXDS1C, BIT(pin));
++	}
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_set_strength);
++
++int jzgpio_get_strength(int port, int *value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	*value = (gpio_read(port, PXDS0) & BIT(pin)) ? (1 << 0) : 0;
++	*value |= (gpio_read(port, PXDS1) & BIT(pin)) ? (1 << 1) : 0;
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_get_strength);
++
++int jzgpio_set_slew_rate(int port, int value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	if (value) {
++		gpio_write(port, PXSRS, BIT(pin));
++	} else {
++		gpio_write(port, PXSRC, BIT(pin));
++	}
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_set_slew_rate);
++
++int jzgpio_get_slew_rate(int port, int *value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	*value = (gpio_read(port, PXSR) & BIT(pin)) ? (1 << 0) : 0;
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_get_slew_rate);
++
++int jzgpio_set_schmitt(int port, int value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	if (value & BIT(0)) {
++		gpio_write(port, PXSMTS, BIT(pin));
++	} else {
++		gpio_write(port, PXSMTC, BIT(pin));
++	}
++
++	if (port == PE_PORT) {
++		if (value & BIT(1)) {
++			gpio_write(port, PXSMT1S, BIT(pin));
++		} else {
++			gpio_write(port, PXSMT1C, BIT(pin));
++		}
++	}
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_set_schmitt);
++
++int jzgpio_get_schmitt(int port, int *value, unsigned long pin)
++{
++	unsigned long flags;
++
++	if (port < 0 || port > 4) {
++		printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++		return -EINVAL;
++	}
++
++	flags = ingenic_pinctrl_lock(port);
++
++	*value = (gpio_read(port, PXSMT) & BIT(pin)) ? (1 << 0) : 0;
++	if (port == PE_PORT) {
++		*value |= (gpio_read(port, PXSMT1) & BIT(pin)) ? (1 << 1) : 0;
++	}
++
++	ingenic_pinctrl_unlock(port, flags);
++
++	return 0;
++}
++EXPORT_SYMBOL(jzgpio_get_schmitt);
++
+ static int jzgpio_set_func1(int port, enum gpio_function func, unsigned long pin)
+ {
+     unsigned long flags;

@@ -1,0 +1,17 @@
+# Stock FlashForge kernel 2.0.7 (from c5-usb-serial-modules: vermagic and exports)
+CONFIG_LOCALVERSION="+"
+CONFIG_HIGHMEM=y
+# Swap: compressed in RAM (zram) or a swap file on /usr/data
+CONFIG_SWAP=y
+CONFIG_ZSMALLOC=y
+CONFIG_ZRAM=y
+CONFIG_CRYPTO_LZO=y
+CONFIG_CRYPTO_LZ4=y
+# Accept both legacy-NaN and 2008-NaN programs (replaces 01-fixnan.sh's devmem write)
+CONFIG_CMDLINE_BOOL=y
+CONFIG_CMDLINE="ieee754=relaxed"
+# So the next kernel's config can be read back from /proc/config.gz
+CONFIG_IKCONFIG=y
+CONFIG_IKCONFIG_PROC=y
+# The board device tree: FlashForge's own (dts/creator5_stock.dts)
+CONFIG_DT_X2600_MODULE_BASE_DTS_FILE="creator5_stock.dts"

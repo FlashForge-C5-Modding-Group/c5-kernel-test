@@ -1,0 +1,15 @@
+# USB Ethernet adapters (the printer has Wi-Fi only). usbnet, mii and the
+# PHY drivers they select are built as modules too and shipped with them.
+CONFIG_USB_NET_DRIVERS=y
+CONFIG_USB_USBNET=y
+# Stock 2.0.8 doesn't export mii_*: it has to be a module here as well
+CONFIG_MII=y
+# Realtek RTL8152/8153/8156: most USB Ethernet adapters
+CONFIG_USB_RTL8152=y
+# ASIX AX88772 (100 Mbit) and AX88179/178A (gigabit)
+CONFIG_USB_NET_AX8817X=y
+CONFIG_USB_NET_AX88179_178A=y
+# Class drivers: CDC ECM and NCM adapters, Android USB tethering (RNDIS)
+CONFIG_USB_NET_CDCETHER=y
+CONFIG_USB_NET_CDC_NCM=y
+CONFIG_USB_NET_RNDIS_HOST=y
