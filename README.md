@@ -104,18 +104,27 @@ address `0x80F00000`, the same format as FlashForge's `xImage`.
 > **Don't try this on your printer.** It's a proof of concept that has run on
 > one printer. If the jump goes wrong the printer can freeze and need a power
 > cycle, a running print is lost, and a bug in the module can crash the stock
-> kernel. It only works on FlashForge kernel package 2.0.7.
+> kernel.
 
-FlashForge's kernel has no kexec (`sys_kexec_load` is an empty stub), so
-`kexec/c5_kexec.ko` adds it for kernel 2.0.7 as a module. It boots another
-kernel image from the running stock one, in RAM only: nothing on the eMMC
-changes, and any reboot or power cycle boots stock again.
+FlashForge's kernels have no kexec (`sys_kexec_load` is an empty stub), so
+`kexec/c5_kexec.ko` adds it as a module. It boots another kernel image from the
+running one, in RAM only: nothing on the eMMC changes, and any reboot or power
+cycle boots stock again.
+
+It loads into any kernel with the stock version string (`5.10.186+ SMP preempt
+mod_unload MIPS32_R5 32BIT`): every FlashForge kernel in the
+[firmware archive](https://github.com/FlashForge-C5-Modding-Group/creator-5-pro-firmware-archive)
+(2.0.1, 2.0.5, 2.0.6, 2.0.7, 2.0.8) has it and every function the module uses,
+and so does this repository's kernel, so one custom kernel can boot the next.
+Dry-run on a printer from this kernel (the version before booted from 2.0.7);
+the other FlashForge kernels are only checked against their symbol tables.
 
 - **Dry run by default:** `c5-kexec.sh IMAGE` loads the module without `go`. It
-  checks it's on kernel 2.0.7 (it calls unexported kernel functions at that
-  kernel's addresses and refuses anywhere else), checks the uImage header and
-  CRCs, stages the image in pages above 32 MB, logs the cache sizes and command
-  line, then frees everything.
+  calls two unexported kernel functions, found through `kallsyms_lookup_name`:
+  the script passes that function's address and `printk`'s from the running
+  kernel's `/proc/kallsyms`, and the module refuses unless `printk`'s matches
+  its own. It checks the uImage header and CRCs, stages the image in pages
+  above 32 MB, logs the cache sizes and command line, then frees everything.
 - **`c5-kexec.sh --go IMAGE`:** refuses during a print, syncs, takes the second
   core offline (Ingenic's SMP code then holds it in reset), shuts the drivers
   down as a reboot does (`kernel_restart_prepare`) and runs

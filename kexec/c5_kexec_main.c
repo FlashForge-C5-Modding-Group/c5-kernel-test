@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * c5_kexec: boot another kernel from FlashForge's Creator 5 kernel 2.0.7, which
- * has no kexec. Nothing on the eMMC changes; power-cycling boots stock again.
+ * c5_kexec: boot another kernel from a Creator 5 kernel without kexec (FlashForge's
+ * have none). Nothing on the eMMC changes; power-cycling boots stock again.
  *
  *   insmod c5_kexec.ko image=/path/xImage cmdline=a=1|b=2        dry run
  *   insmod c5_kexec.ko image=/path/xImage cmdline=a=1|b=2 go=1   boot it
@@ -11,9 +11,11 @@
  * everything. go=1 needs the second core offline (it's then held in reset), shuts
  * the drivers down as a reboot does, and jumps through c5_kexec_tramp.
  *
- * Only for kernel 2.0.7: it calls kernel functions that aren't exported, at
- * addresses checked against that kernel's symbol table, and refuses to load on
- * any other kernel.
+ * It calls two kernel functions that aren't exported (kernel_restart_prepare,
+ * migrate_to_reboot_cpu), found through kallsyms_lookup_name. Its address and
+ * printk's come from the running kernel's /proc/kallsyms (c5-kexec.sh passes
+ * them); printk's must match the module's own, or it refuses. Without them it
+ * uses FlashForge kernel 2.0.7's addresses and refuses on any other kernel.
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -33,8 +35,6 @@
 /* Stock 2.0.7 (kernel package 2.0.7) addresses, from its /proc/kallsyms */
 #define STOCK_PRINTK			0x8083a828UL
 #define STOCK_KALLSYMS_LOOKUP_NAME	0x800dcc1cUL
-#define STOCK_KERNEL_RESTART_PREPARE	0x80062880UL
-#define STOCK_MIGRATE_TO_REBOOT_CPU	0x800628d4UL
 
 /*
  * Everything below this physical address may be overwritten while the new kernel
@@ -73,6 +73,11 @@ MODULE_PARM_DESC(cmdline, "kernel command line with | for each space (BusyBox in
 static bool go;
 module_param(go, bool, 0);
 MODULE_PARM_DESC(go, "boot the image instead of a dry run");
+static unsigned long printk_addr, kallsyms_addr;
+module_param(printk_addr, ulong, 0);
+MODULE_PARM_DESC(printk_addr, "printk's address in /proc/kallsyms, to check kallsyms_addr is this kernel's");
+module_param(kallsyms_addr, ulong, 0);
+MODULE_PARM_DESC(kallsyms_addr, "kallsyms_lookup_name's address in /proc/kallsyms (default: kernel 2.0.7's)");
 
 /*
  * Blocks taken from the allocator, kept or rejected (below SAFE_PHYS) until done.
@@ -157,9 +162,9 @@ static void wback(unsigned long start, unsigned long len, unsigned int dline, un
 
 static int __init c5_kexec_init(void)
 {
-	unsigned long (*lookup)(const char *) = (void *)STOCK_KALLSYMS_LOOKUP_NAME;
-	void (*restart_prepare)(char *) = (void *)STOCK_KERNEL_RESTART_PREPARE;
-	void (*migrate)(void) = (void *)STOCK_MIGRATE_TO_REBOOT_CPU;
+	unsigned long (*lookup)(const char *);
+	void (*restart_prepare)(char *);
+	void (*migrate)(void);
 	struct uimage_header h;
 	struct c5_kexec_args *args;
 	void *buf = NULL;
@@ -169,16 +174,32 @@ static int __init c5_kexec_init(void)
 	char **argv, *str;
 	int ret;
 
-	/* Kernel 2.0.7 only: these addresses are that kernel's */
-	if ((unsigned long)printk != STOCK_PRINTK) {
-		pr_err("c5_kexec: not FlashForge kernel 2.0.7 (printk at %px), refusing\n", printk);
+	/* kallsyms_lookup_name: given (checked through printk) or kernel 2.0.7's */
+	if (kallsyms_addr) {
+		if (printk_addr != (unsigned long)printk) {
+			pr_err("c5_kexec: printk_addr %lx isn't this kernel's printk (%px), refusing\n",
+			       printk_addr, printk);
+			return -EINVAL;
+		}
+		lookup = (void *)kallsyms_addr;
+	} else if ((unsigned long)printk == STOCK_PRINTK) {
+		lookup = (void *)STOCK_KALLSYMS_LOOKUP_NAME;
+	} else {
+		pr_err("c5_kexec: not kernel 2.0.7: pass printk_addr= and kallsyms_addr= from /proc/kallsyms\n");
 		return -ENODEV;
 	}
-	if (lookup("kernel_restart_prepare") != STOCK_KERNEL_RESTART_PREPARE ||
-	    lookup("migrate_to_reboot_cpu") != STOCK_MIGRATE_TO_REBOOT_CPU) {
-		pr_err("c5_kexec: kernel symbols don't match 2.0.7, refusing\n");
+	if (lookup("printk") != (unsigned long)printk) {
+		pr_err("c5_kexec: kallsyms_lookup_name doesn't find printk, refusing\n");
 		return -ENODEV;
 	}
+	restart_prepare = (void *)lookup("kernel_restart_prepare");
+	migrate = (void *)lookup("migrate_to_reboot_cpu");
+	if (!restart_prepare || !migrate) {
+		pr_err("c5_kexec: kernel_restart_prepare or migrate_to_reboot_cpu not found, refusing\n");
+		return -ENODEV;
+	}
+	pr_info("c5_kexec: running kernel: kernel_restart_prepare %px, migrate_to_reboot_cpu %px\n",
+		restart_prepare, migrate);
 	if (!image || !cmdline) {
 		pr_err("c5_kexec: image= and cmdline= are required\n");
 		return -EINVAL;
