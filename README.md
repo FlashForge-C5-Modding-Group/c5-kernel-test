@@ -23,7 +23,7 @@ is built from). It adds what FlashForge's kernel leaves out:
   `DETECT_HUNG_TASK`, stay.)
 
 **Experimental.** It has been booted on a printer through `kexec/` (below),
-below), not flashed. Flashing a kernel can leave the printer unable to boot;
+not flashed. Flashing a kernel can leave the printer unable to boot;
 the way back is Ingenic's USB flasher over the mainboard's ports.
 
 ## How it matches FlashForge's kernel
