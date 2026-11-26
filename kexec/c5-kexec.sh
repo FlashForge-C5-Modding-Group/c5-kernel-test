@@ -4,14 +4,22 @@
 #
 #   c5-kexec.sh IMAGE          dry run: check everything, boot nothing
 #   c5-kexec.sh --go IMAGE     boot IMAGE now (the printer drops off the network)
+#   --no-console               don't show boot messages on the touchscreen
+#   C5_KEXEC_EXTRA="..."       more kernel options, appended to the command line
 #
 # c5_kexec.ko is looked for next to this script.
 set -eu
 DIR=$(cd "$(dirname "$0")" && pwd)
 MOD=$DIR/c5_kexec.ko
-GO=
-[ "${1:-}" = --go ] && { GO=1; shift; }
-IMAGE=${1:?usage: c5-kexec.sh [--go] IMAGE}
+GO= CONSOLE=1
+while :; do
+    case "${1:-}" in
+        --go) GO=1; shift ;;
+        --no-console) CONSOLE=; shift ;;
+        *) break ;;
+    esac
+done
+IMAGE=${1:?usage: c5-kexec.sh [--go] [--no-console] IMAGE}
 
 die() { echo "c5-kexec: $*" >&2; exit 1; }
 
@@ -27,7 +35,17 @@ grep -q '^c5_kexec ' /proc/modules && rmmod c5_kexec
 
 # BusyBox insmod drops quotes, so spaces travel as | (the module turns them back)
 grep -q '|' /proc/cmdline && die "/proc/cmdline contains |"
-CMDLINE=$(tr ' ' '|' < /proc/cmdline)
+CMDLINE=$(cat /proc/cmdline)
+if [ -n "$CONSOLE" ]; then
+    # Boot messages on the touchscreen (the new kernel's framebuffer console), turned
+    # like GrumpyScreen's display_rotate, which counts the other way round from
+    # fbcon=rotate; the last console= becomes /dev/console
+    ROTATE=$(sed -n 's/^display_rotate: *\([0-3]\).*/\1/p' /usr/data/opencreator/klipper/config/grumpyscreen.cfg \
+        /usr/data/grumpyscreen/grumpyscreen.cfg 2>/dev/null | head -n 1)
+    CMDLINE="$CMDLINE console=tty0 fbcon=rotate:$(( (4 - ${ROTATE:-1}) % 4 ))"
+fi
+CMDLINE="$CMDLINE${C5_KEXEC_EXTRA:+ $C5_KEXEC_EXTRA}"
+CMDLINE=$(echo "$CMDLINE" | tr ' ' '|')
 if [ -z "$GO" ]; then
     dmesg -c > /dev/null
     insmod "$MOD" image="$IMAGE" cmdline="$CMDLINE" || { dmesg | grep c5_kexec; die "dry run failed"; }

@@ -1,0 +1,33 @@
+--- a/drivers/usb/dwc2/hcd_queue.c
++++ b/drivers/usb/dwc2/hcd_queue.c
+@@ -31,6 +31,17 @@
+ /* If we get a NAK, wait this long before retrying */
+ #define DWC2_RETRY_WAIT_DELAY (1 * NSEC_PER_MSEC)
+ 
++/*
++ * Split bulk IN transfers a device keeps NAKing (a full-speed USB serial adapter
++ * behind a high-speed hub, polled while it has nothing to send) cost two
++ * interrupts per retry: at 1 ms, thousands a second. Wait longer for those.
++ * The device buffers what arrives meanwhile; FTDI adapters default to 16 ms.
++ */
++static unsigned int split_bulk_in_nak_delay_us = 4000;
++module_param(split_bulk_in_nak_delay_us, uint, 0644);
++MODULE_PARM_DESC(split_bulk_in_nak_delay_us,
++		 "Wait before retrying a NAKed split bulk IN transfer, in microseconds (default 4000)");
++
+ /**
+  * dwc2_periodic_channel_available() - Checks that a channel is available for a
+  * periodic transfer
+@@ -1711,7 +1722,11 @@
+ 			list_add_tail(&qh->qh_list_entry,
+ 				      &hsotg->non_periodic_sched_waiting);
+ 			qh->wait_timer_cancel = false;
+-			delay = ktime_set(0, DWC2_RETRY_WAIT_DELAY);
++			if (qh->ep_type == USB_ENDPOINT_XFER_BULK && qh->ep_is_in)
++				delay = ns_to_ktime((u64)READ_ONCE(split_bulk_in_nak_delay_us) *
++						    NSEC_PER_USEC);
++			else
++				delay = ktime_set(0, DWC2_RETRY_WAIT_DELAY);
+ 			hrtimer_start(&qh->wait_timer, delay, HRTIMER_MODE_REL);
+ 		} else {
+ 			list_add_tail(&qh->qh_list_entry,

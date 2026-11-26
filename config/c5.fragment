@@ -15,3 +15,14 @@ CONFIG_IKCONFIG=y
 CONFIG_IKCONFIG_PROC=y
 # The board device tree: FlashForge's own (dts/creator5_stock.dts)
 CONFIG_DT_X2600_MODULE_BASE_DTS_FILE="creator5_stock.dts"
+# Less debug overhead. Only options that don't change structures FlashForge's
+# modules use: DEBUG_SPINLOCK (spinlock_t) and DETECT_HUNG_TASK (task_struct) stay.
+# CONFIG_SCHED_DEBUG is not set
+# CONFIG_DEBUG_NOTIFIERS is not set
+# Boot messages on the touchscreen: c5-kexec.sh adds console=tty0 and fbcon=rotate,
+# OpenCreator's UI scripts hand the screen back before the UI starts
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
+# Selects the generic drawing helpers patch 0005 gives FlashForge's jzfb, which
+# has none (no simple-framebuffer node exists, so the driver itself stays idle)
+CONFIG_FB_SIMPLE=y

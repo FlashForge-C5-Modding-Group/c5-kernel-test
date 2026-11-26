@@ -12,8 +12,17 @@ is built from). It adds what FlashForge's kernel leaves out:
 - **`/proc/config.gz`**, so its configuration can be read back.
 - usb-serial and USB Ethernet built in (see
   [c5-usb-serial-modules](https://github.com/FlashForge-C5-Modding-Group/c5-usb-serial-modules)).
+- **Boot messages on the touchscreen** (framebuffer console), when booted
+  through `kexec/` (below).
+- **Fewer USB interrupts:** the USB controller interrupts the CPU about 17,700
+  times a second on a C5, on stock as well (start-of-frame, the camera, the
+  ACE's USB serial adapter). A longer wait before retrying NAKed split bulk
+  reads cuts about 1,500 of them; see patch 0004.
+- Less debug overhead: `SCHED_DEBUG` and `DEBUG_NOTIFIERS` off. (Options that
+  change structures FlashForge's modules use, `DEBUG_SPINLOCK` and
+  `DETECT_HUNG_TASK`, stay.)
 
-**Experimental.** It has been booted once on a printer (through `kexec/`,
+**Experimental.** It has been booted on a printer through `kexec/` (below),
 below), not flashed. Flashing a kernel can leave the printer unable to boot;
 the way back is Ingenic's USB flasher over the mainboard's ports.
 
@@ -49,6 +58,19 @@ theirs (kernel package 2.0.7) by comparison:
     to pull-up inputs at the end of `console_init`; done here too, so pin
     states match. Their console mute on PC6 is left out: this kernel's
     console always prints.
+  - `0004-dwc2-split-bulk-in-nak-delay.patch`: dwc2 retries a split bulk IN
+    transfer the device NAKs after 1 ms; a full-speed USB serial adapter behind
+    the C5's hub (the ACE) then costs ~2,700 interrupts a second. This waits
+    4 ms instead, adjustable at run time:
+    `/sys/module/dwc2/parameters/split_bulk_in_nak_delay_us`. Measured: 18,257
+    interrupts/s at 1 ms, ~16,700 at 4 ms, the ACE working normally.
+  - `0005-fbdev-generic-drawing-ops.patch`: FlashForge's display driver (jzfb
+    in their `soc_fb.ko`) has no drawing operations, so the framebuffer console
+    would call NULL. Framebuffers without them get the generic memory-mapped
+    ones (in a copy of the driver's fb_ops) and a default palette, and the
+    console takes them over a second after they register, holding only the
+    console lock: taking jzfb over during registration, with its fb_info lock
+    held too, hangs.
 
 Remaining differences in the symbol table: the watchdog's restart handler,
 which Ingenic disabled in v5.0 (rebooting goes through `jz_wdt_restart` in
@@ -100,17 +122,22 @@ changes, and any reboot or power cycle boots stock again.
   `c5_kexec_tramp.S` uncached: it copies the image to its load address, writes
   back and invalidates the L1 and L2 caches and jumps in with the current
   command line, as U-Boot would. The new kernel starts the second core itself.
+- **Console:** the command line gets `console=tty0 fbcon=rotate:N`, N turned
+  from GrumpyScreen's `display_rotate` (which counts the other way round), so
+  boot messages scroll on the touchscreen. OpenCreator's UI scripts hand the
+  screen back to the UI when it starts. `--no-console` leaves it out.
+  `C5_KEXEC_EXTRA="..."` appends more options.
 - If the new kernel panics it reboots into stock after 10 s; if it hangs, it
   needs a power cycle.
 
-Tested once with this repository's v5.0 build: both cores, all FlashForge
-modules, Wi-Fi, screen, camera and Klipper (all MCUs) came up, and zram swap
-worked. Not tested: the VDS dryer (RS485), USB devices, printing.
+Tested with this repository's v5.0 build: both cores, all FlashForge modules,
+Wi-Fi, screen, camera and Klipper (all MCUs) came up, zram swap worked, boot
+messages showed on the touchscreen and the ACE answered. Not tested: the VDS
+dryer (RS485), USB devices, printing.
 
-Known problem: OpenCreator's `01-fixnan.sh` writes a byte into kernel memory at
-an address meant for the stock kernel, chosen by kernel package; on the new
-kernel it lands in a dynamic-debug descriptor. It needs to skip custom kernels
-(`/proc/config.gz`), which already have `ieee754=relaxed`.
+OpenCreator's `01-fixnan.sh` skips custom kernels (`/proc/config.gz`) since
+opencreator-fs `a4ffaa6`: before, it wrote a byte into kernel memory at an
+address meant for the stock kernel.
 
 Build (against a kernel tree configured like stock 2.0.7: the SDK v2.0
 defconfig with `CONFIG_HIGHMEM=y` and `CONFIG_LOCALVERSION="+"`, then
