@@ -28,6 +28,9 @@ CONFIG_WLAN_VENDOR_REALTEK=y
 CONFIG_RTW88=y
 CONFIG_RTW88_8821CU=y
 CONFIG_EXTRA_FIRMWARE="rtw88/rtw8821c_fw.bin"
+# Power saving off: rtw88 USB chips in LPS fail to leave it, pings go to
+# 10-200 ms and the link drops ("firmware failed to leave lps state").
+# CONFIG_CFG80211_DEFAULT_PS is not set
 # No closed vendor modules on 6.6, so no structure layouts to keep
 # CONFIG_DEBUG_SPINLOCK is not set
 # CONFIG_SCHED_DEBUG is not set
