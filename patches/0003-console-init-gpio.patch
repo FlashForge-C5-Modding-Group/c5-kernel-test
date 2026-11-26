@@ -1,0 +1,61 @@
+--- a/arch/mips/xburst2/soc-x2600/gpio.c
++++ b/arch/mips/xburst2/soc-x2600/gpio.c
+@@ -241,6 +241,19 @@
+ unsigned long ingenic_pinctrl_lock(int port);
+ void ingenic_pinctrl_unlock(int port, unsigned long flags);
+ 
++/* jzgpio_set_func without the pinctrl lock, for use before pinctrl is up (FlashForge) */
++int jzgpio_set_func_my(int port, enum gpio_function func, unsigned long pins)
++{
++    if (port < 0 || port > 4) {
++        printk(KERN_ERR "gpio: invalid gpio port for x2600: %d\n", port);
++        return -EINVAL;
++    }
++
++    hal_gpio_set_func(port, pins, func);
++
++    return 0;
++}
++
+ int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins)
+ {
+     unsigned long flags;
+--- a/arch/mips/xburst2/soc-x2600/include/soc/gpio.h
++++ b/arch/mips/xburst2/soc-x2600/include/soc/gpio.h
+@@ -37,6 +37,7 @@
+ 	GPIO_NR_PORTS,
+ };
+ 
++int jzgpio_set_func_my(int port, enum gpio_function func, unsigned long pins);
+ int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins);
+ 
+ #endif /* _SOC_GPIO_H_ */
+--- a/kernel/printk/printk.c
++++ b/kernel/printk/printk.c
+@@ -60,6 +60,10 @@
+ #include "braille.h"
+ #include "internal.h"
+ 
++#ifdef CONFIG_SOC_X2600
++#include <soc/gpio.h>
++#endif
++
+ int console_printk[4] = {
+ 	CONSOLE_LOGLEVEL_DEFAULT,	/* console_loglevel */
+ 	MESSAGE_LOGLEVEL_DEFAULT,	/* default_message_loglevel */
+@@ -2984,6 +2988,15 @@
+ 		trace_initcall_finish(call, ret);
+ 		ce++;
+ 	}
++
++#ifdef CONFIG_SOC_X2600
++	/*
++	 * As FlashForge's kernel. The 6 is a pin mask here, so this sets PC1 and PC2
++	 * (FlashForge likely meant pin 6, their console mute pin, which we leave out).
++	 * Kept so pin states match stock.
++	 */
++	jzgpio_set_func_my(GPIO_PORT_C, GPIO_INPUT | GPIO_PULL_UP, 6);
++#endif
+ }
+ 
+ /*

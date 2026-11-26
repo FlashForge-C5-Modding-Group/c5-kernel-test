@@ -76,3 +76,6 @@ CONFIG_SPI_SPIDEV=y
 CONFIG_COREDUMP=y
 CONFIG_ELF_CORE=y
 CONFIG_CRYPTO_JITTERENTROPY=y
+# Ingenic's watchdog (/dev/watchdog0) and its restart handler, which reboots the SoC
+CONFIG_INGENIC_WDT=y
+CONFIG_SQUASHFS_LZO=y

@@ -1,0 +1,1 @@
+arch/mips/xburst2/soc-x2600/gpio.c EXPORT_SYMBOL(jzgpio_set_strength);

@@ -1,8 +1,8 @@
 # c5-kernel (test)
 
 A Linux kernel for the FlashForge Creator 5 / Creator 5 Pro, built from
-Ingenic's X2600 SDK, the same Linux 5.10.186 source FlashForge's kernel is
-built from. It adds what FlashForge's kernel leaves out:
+Ingenic's X2600 SDK v5.0 (Linux 5.10.186, the same kernel version FlashForge's
+is built from). It adds what FlashForge's kernel leaves out:
 
 - **Swap:** `CONFIG_SWAP`, zram (compressed swap in RAM) and swap files.
 - **Both NaN encodings:** `ieee754=relaxed` is built into the command line, so
@@ -21,11 +21,16 @@ boot; the way back is Ingenic's USB flasher over the mainboard's ports.
 FlashForge's kernel has no embedded configuration, so this one was matched to
 theirs (kernel package 2.0.7) by comparison:
 
+- **Source:** SDK v5.0 (`ingenic-linux-kernel5.10-x2600-v5.0-20251115`) has
+  Ingenic's own versions of what FlashForge's kernel has beyond the older
+  v2.0 SDK: the newer USB controller driver (`dwc2`), USB PHY power-up, eMMC
+  card detect, the RS485 transmit-enable timer in the serial driver (the VDS
+  dryer's port), and GPIO drive strength, slew rate and Schmitt trigger.
 - **Configuration:** Ingenic's `x2600_module_base_linux_mmc0_defconfig` plus
   `config/*.fragment`. `config/stock.fragment` adds what FlashForge's kernel
   has built in beyond the defconfig (ext4, overlayfs, FUSE, exFAT, NTFS,
-  codepages, EHCI/OHCI, CAN, virtio and more), found by comparing the
-  functions in its symbol table with this build's `System.map`.
+  codepages, EHCI/OHCI, CAN, virtio, the watchdog and more), found by
+  comparing the functions in its symbol table with this build's `System.map`.
 - **Device tree:** `dts/creator5_stock.dts`, decompiled from the device tree
   built into FlashForge's kernel (identical to `/sys/firmware/fdt` on a running
   printer). The one built into this kernel is byte-identical to theirs.
@@ -33,22 +38,34 @@ theirs (kernel package 2.0.7) by comparison:
   same as FlashForge's, so their driver modules (`/module_driver`,
   `/usr/prog/modules`) load. Every symbol those modules import is in this
   kernel.
-- **`patches/0001-gpio-strength-slew-schmitt.patch`:** FlashForge added GPIO
-  drive strength, slew rate and Schmitt trigger functions that their
-  `soc_gpio.ko` needs; they're ported from Ingenic's kernel-6.6 SDK.
+- **`patches/`:** applied where the SDK lacks the change (a `.skip-if` file
+  names what to look for), so the same patches work on SDK v2.0 too:
+  - `0001-gpio-strength-slew-schmitt.patch`: GPIO functions FlashForge's
+    `soc_gpio.ko` needs, ported from Ingenic's kernel-6.6 SDK. v5.0 has them.
+  - `0002-uart-rs485-tx-enable.patch`: the RS485 transmit enable, for SDKs
+    without it. v5.0 has Ingenic's own.
+  - `0003-console-init-gpio.patch`: FlashForge's kernel sets GPIO PC1 and PC2
+    to pull-up inputs at the end of `console_init`; done here too, so pin
+    states match. Their console mute on PC6 is left out: this kernel's
+    console always prints.
 
-Known differences: FlashForge also changed a few drivers in ways the SDK
-doesn't have, and those changes aren't here: the USB controller (`dwc2`), USB
-PHY power, eMMC card detect, an RS485 timer in the serial driver, and drivers
-for hardware the Creator 5 doesn't have (AD100 PHY, SDIO Wi-Fi modules).
+Remaining differences in the symbol table: the watchdog's restart handler,
+which Ingenic disabled in v5.0 (rebooting goes through `jz_wdt_restart` in
+both kernels, which runs first), and functions the compiler inlined
+differently.
 
 ## Building
 
-On Linux (WSL2 works), with the SDK and toolchain unpacked (both are on
-Ingenic's public FTP; see c5-usb-serial-modules for where):
+On Linux (WSL2 works), with the SDK and toolchain unpacked. Both are on
+Ingenic's public FTP (`ftp://ingenic_public:BFdg2f9B12@ftp.ingenic.com.cn`):
+the SDK is
+`DevSupport/X2600E/01_SW/09_kernel5.10_x2600-sdk_v5.0-20251115/01_ingenic-linux-kernel5.10-x2600-v5.0-20251115/`
+(only its `kernel/kernel-5.10` is needed); see c5-usb-serial-modules for the
+toolchain. Unpack on a Linux file system: on NTFS, the netfilter files whose
+names differ only by case overwrite each other.
 
 ```sh
-./build.sh /path/to/ingenic-linux-kernel4.4.94-kernel5.10-x2600-v2.0-20230906/kernel/kernel-5.10 \
+./build.sh /path/to/ingenic-linux-kernel5.10-x2600-v5.0-20251115/kernel/kernel-5.10 \
            /path/to/mips-xburst2-linux-toolchain-r6.0.0 xImage
 ```
 

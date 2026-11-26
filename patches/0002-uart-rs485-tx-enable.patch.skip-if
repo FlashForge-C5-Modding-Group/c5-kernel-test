@@ -1,0 +1,1 @@
+module_drivers/drivers/tty/serial/ingenic_uart.c rs485_tx_timer_handler

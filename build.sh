@@ -5,7 +5,7 @@
 #
 #   ./build.sh KERNEL_SRC TOOLCHAIN_DIR [make targets]
 #
-# KERNEL_SRC     kernel/kernel-5.10 from ingenic-linux-kernel4.4.94-kernel5.10-x2600-v2.0-20230906
+# KERNEL_SRC     kernel/kernel-5.10 from ingenic-linux-kernel5.10-x2600-v5.0-20251115 (v2.0 works too)
 # TOOLCHAIN_DIR  mips-xburst2-linux-toolchain-r6.0.0 (contains bin/)
 # OUT            build folder, by default ~/c5-kernel-out (a Linux file system builds faster)
 set -euo pipefail
@@ -24,9 +24,15 @@ grep -q '^SUBLEVEL = 186$' "$KSRC/Makefile" || die "$KSRC is not Linux 5.10.186"
 [ -x "$TC/bin/mips-xburst2-linux-gnu-gcc" ] || die "no mips-xburst2-linux-gnu-gcc in $TC/bin"
 
 # FlashForge's kernel has source changes Ingenic's SDK lacks; patches/ puts back
-# what their modules need. Applied once to the SDK tree (a git checkout).
+# what their modules and hardware need. Applied once to the SDK tree. A patch
+# with a NAME.skip-if file ("FILE TEXT") is left out when FILE already contains
+# TEXT: newer SDK releases have some of these changes.
 for p in "$HERE"/patches/*.patch; do
     [ -f "$p" ] || continue
+    if [ -f "$p.skip-if" ]; then
+        read -r skip_file skip_text < "$p.skip-if"
+        grep -qF "$skip_text" "$KSRC/$skip_file" 2>/dev/null && continue
+    fi
     if patch -d "$KSRC" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
         continue
     fi
