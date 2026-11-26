@@ -31,10 +31,19 @@
 #include <asm/addrspace.h>
 #include <asm/mipsregs.h>
 #include <asm/page.h>
+#include <linux/version.h>
 
 /* Stock 2.0.7 (kernel package 2.0.7) addresses, from its /proc/kallsyms */
 #define STOCK_PRINTK			0x8083a828UL
 #define STOCK_KALLSYMS_LOOKUP_NAME	0x800dcc1cUL
+/* printk became a macro around _printk in 5.15 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#define PRINTK_FN			_printk
+#define PRINTK_SYM			"_printk"
+#else
+#define PRINTK_FN			printk
+#define PRINTK_SYM			"printk"
+#endif
 
 /*
  * Everything below this physical address may be overwritten while the new kernel
@@ -176,19 +185,19 @@ static int __init c5_kexec_init(void)
 
 	/* kallsyms_lookup_name: given (checked through printk) or kernel 2.0.7's */
 	if (kallsyms_addr) {
-		if (printk_addr != (unsigned long)printk) {
+		if (printk_addr != (unsigned long)PRINTK_FN) {
 			pr_err("c5_kexec: printk_addr %lx isn't this kernel's printk (%px), refusing\n",
-			       printk_addr, printk);
+			       printk_addr, PRINTK_FN);
 			return -EINVAL;
 		}
 		lookup = (void *)kallsyms_addr;
-	} else if ((unsigned long)printk == STOCK_PRINTK) {
+	} else if ((unsigned long)PRINTK_FN == STOCK_PRINTK) {
 		lookup = (void *)STOCK_KALLSYMS_LOOKUP_NAME;
 	} else {
 		pr_err("c5_kexec: not kernel 2.0.7: pass printk_addr= and kallsyms_addr= from /proc/kallsyms\n");
 		return -ENODEV;
 	}
-	if (lookup("printk") != (unsigned long)printk) {
+	if (lookup(PRINTK_SYM) != (unsigned long)PRINTK_FN) {
 		pr_err("c5_kexec: kallsyms_lookup_name doesn't find printk, refusing\n");
 		return -ENODEV;
 	}

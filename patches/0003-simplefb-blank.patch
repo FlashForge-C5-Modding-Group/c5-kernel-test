@@ -1,0 +1,29 @@
+simplefb: accept blank requests, so LVGL fbdev programs (GrumpyScreen) don't stop at a
+failed FBIOBLANK (and draw a 0x0 display), and the backlight follows blanking
+
+--- a/drivers/video/fbdev/simplefb.c
++++ b/drivers/video/fbdev/simplefb.c
+@@ -107,11 +107,23 @@
+ 		release_mem_region(mem->start, resource_size(mem));
+ }
+ 
++/*
++ * The display stays as the firmware or previous kernel set it up. Accepting
++ * blank requests (instead of -EINVAL) lets programs that unblank before
++ * drawing, such as LVGL's fbdev driver, carry on, and makes fb_blank() send
++ * FB_EVENT_BLANK, which switches the board's backlight off and on.
++ */
++static int simplefb_blank(int blank, struct fb_info *info)
++{
++	return 0;
++}
++
+ static const struct fb_ops simplefb_ops = {
+ 	.owner		= THIS_MODULE,
+ 	FB_DEFAULT_IOMEM_OPS,
+ 	.fb_destroy	= simplefb_destroy,
+ 	.fb_setcolreg	= simplefb_setcolreg,
++	.fb_blank	= simplefb_blank,
+ };
+ 
+ static struct simplefb_format simplefb_formats[] = SIMPLEFB_FORMATS;

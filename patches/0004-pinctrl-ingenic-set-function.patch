@@ -1,0 +1,32 @@
+pinctrl-ingenic: export ingenic_gpio_set_function(), a locked per-pin function switch
+for drivers/c5_jz_pwm.c (FlashForge's soc_pwm.ko used utils.ko's gpio_set_func)
+
+--- a/module_drivers/drivers/pinctrl/pinctrl-ingenic.c
++++ b/module_drivers/drivers/pinctrl/pinctrl-ingenic.c
+@@ -1341,6 +1341,26 @@
+ 	return 0;
+ }
+ 
++/*
++ * Switches one pin, numbered port * 32 + pin, to func (enum gpio_function;
++ * for GPIO_OUTPUT0/1 the level too), for drivers that move a pin between its
++ * device function and a constant level on the fly: the Creator 5's
++ * /dev/jz_pwm (c5_jz_pwm.c), as FlashForge's soc_pwm.ko did with gpio_set_func.
++ */
++int ingenic_gpio_set_function(unsigned int pin, unsigned int func)
++{
++	struct ingenic_gpio_chip *jzgc;
++
++	if (!gpctl || pin / 32 >= gpctl->num_chips)
++		return -ENODEV;
++	jzgc = &gpctl->gpio_chips[pin / 32];
++	if (func == GPIO_OUTPUT0 || func == GPIO_OUTPUT1)
++		ingenic_gpio_pins_set(jzgc, BIT(pin % 32), func == GPIO_OUTPUT1);
++	ingenic_gpio_set_func(jzgc, gpctl->priv->have_shadow, func, BIT(pin % 32));
++	return 0;
++}
++EXPORT_SYMBOL_GPL(ingenic_gpio_set_function);
++
+ static int ingenic_pinmux_gpio_set_dir(struct pinctrl_dev *pctldev,
+                                        struct pinctrl_gpio_range *range, unsigned gpio,
+                                        bool input)

@@ -1,0 +1,180 @@
+uart: RS485 transmit enable (ingenic,rs485-tx-enable-gpio) for the dryer on ttyS3,
+ported from Ingenic SDK v5.0 (kernel 5.10), which FlashForge's kernel has.
+
+--- a/module_drivers/drivers/tty/serial/ingenic_uart.c
++++ b/module_drivers/drivers/tty/serial/ingenic_uart.c
+@@ -49,6 +49,8 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/scatterlist.h>
+ #include <linux/tty_flags.h>
++#include <linux/gpio/consumer.h>
++#include <linux/hrtimer.h>
+ 
+ #include "ingenic_uart.h"
+ 
+@@ -120,6 +122,17 @@
+ #ifdef CONFIG_DEBUG_FS
+ 	struct dentry   *debugfs;
+ #endif
++	/*
++	 * RS485 half duplex: ingenic,rs485-tx-enable-gpio is driven high while
++	 * sending; rs485_timer drops it once the last byte has left the wire.
++	 */
++	struct gpio_desc *rs485_tx_enable_gpiod;
++	unsigned int baud;
++	int per_byte_bit;
++	struct hrtimer rs485_timer;
++	spinlock_t wait_time_lock;
++	unsigned long long wait_time_ns;
++	int timer_waiting;
+ };
+ static inline void check_modem_status(struct uart_ingenic_port *up);
+ static unsigned short *serial47xx_get_divisor(struct uart_port *port, unsigned int baud);
+@@ -702,15 +715,51 @@
+ 	}
+ 	tty_flip_buffer_push(tty->port);
+ }
++/* Adds the wire time of byte bytes to the RS485 transmit-enable wait */
++static void calculate_tx_time(struct uart_ingenic_port *up, int byte)
++{
++	unsigned long long need_wait_ns;
++
++	need_wait_ns = (unsigned long long)byte * up->per_byte_bit * 1000 * 1000 * 1000;
++	if (!up->timer_waiting) {
++		/* Wait for half a byte of sending time to ensure the actual data transmission ends */
++		need_wait_ns += (unsigned long long)up->per_byte_bit * 1000 * 1000 * 1000 / 2;
++	}
++	do_div(need_wait_ns, (unsigned long long)(up->baud));
++	up->wait_time_ns += need_wait_ns;
++}
++
++/* Queues bytes' wire time; the timer drops transmit-enable after the last one */
++static void rs485_tx_done(struct uart_ingenic_port *up, int bytes)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&up->wait_time_lock, flags);
++	calculate_tx_time(up, bytes);
++	if (!up->timer_waiting) {
++		hrtimer_start(&up->rs485_timer, ktime_set(0, up->wait_time_ns), HRTIMER_MODE_REL);
++		up->timer_waiting = 1;
++		up->wait_time_ns = 0;
++	}
++	spin_unlock_irqrestore(&up->wait_time_lock, flags);
++}
++
+ /* transmit one char*/
+ static void transmit_chars(struct uart_ingenic_port *up)
+ {
+ 	struct circ_buf *xmit = &up->port.state->xmit;
+ 	int count;
++	int rs485_tx_cnt = 0;
+ 	if (up->port.x_char) {
++		if (up->rs485_tx_enable_gpiod) {
++			gpiod_set_value(up->rs485_tx_enable_gpiod, 1);
++		}
+ 		serial_out(up, UART_TX, up->port.x_char);//transmit char=port.x_char
+ 		up->port.icount.tx++;
+ 		up->port.x_char = 0;//transmit finish x_char=0
++		if (up->rs485_tx_enable_gpiod) {
++			rs485_tx_done(up, 1);
++		}
+ 		return;
+ 	}
+ 	if (uart_circ_empty(xmit) || uart_tx_stopped(&up->port)) {//xmit is empty or stop tx
+@@ -718,17 +767,26 @@
+ 		return;
+ 	}
+ 
++	if (up->rs485_tx_enable_gpiod) {
++		gpiod_set_value(up->rs485_tx_enable_gpiod, 1);
++	}
++
+ 	/* try to tx char until xmit is empty or count=0*/
+ 	count = up->port.fifosize / 2;
+ 	do {
+ 		serial_out(up, UART_TX, xmit->buf[xmit->tail]);
+ 		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
+ 		up->port.icount.tx++;
++		rs485_tx_cnt++;
+ 		if (uart_circ_empty(xmit)) {
+ 			break;
+ 		}
+ 	} while (--count > 0);
+ 
++	if (up->rs485_tx_enable_gpiod) {
++		rs485_tx_done(up, rs485_tx_cnt);
++	}
++
+ 	/*if circ_chars is less than WARKUP_CHARS,then warkup   */
+ 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS) { //get the renainder of circ_chars
+ 		uart_write_wakeup(&up->port);
+@@ -738,6 +796,28 @@
+ 	/*  serial_ingenic_stop_tx(&up->port); */
+ }
+ 
++static enum hrtimer_restart rs485_tx_timer_handler(struct hrtimer *timer)
++{
++	unsigned long flags;
++	enum hrtimer_restart restart;
++	struct uart_ingenic_port *up = container_of(timer, struct uart_ingenic_port, rs485_timer);
++
++	spin_lock_irqsave(&up->wait_time_lock, flags);
++	if (up->wait_time_ns == 0) {
++		/* nothing sent since the timer started: back to receiving */
++		up->timer_waiting = 0;
++		restart = HRTIMER_NORESTART;
++		gpiod_set_value(up->rs485_tx_enable_gpiod, 0);
++	} else {
++		hrtimer_forward_now(&up->rs485_timer, ktime_set(0, up->wait_time_ns));
++		up->wait_time_ns = 0;
++		up->timer_waiting = 1;
++		restart = HRTIMER_RESTART;
++	}
++	spin_unlock_irqrestore(&up->wait_time_lock, flags);
++	return restart;
++}
++
+ static void serial_ingenic_start_tx(struct uart_port *port)
+ {
+ 	struct uart_ingenic_port *up = (struct uart_ingenic_port *)port;
+@@ -968,6 +1048,11 @@
+ 	(void) serial_in(up, UART_IIR);
+ 	(void) serial_in(up, UART_MSR);
+ 
++	if (up->rs485_tx_enable_gpiod) {
++		/* RS485 default in receive mode */
++		gpiod_set_value(up->rs485_tx_enable_gpiod, 0);
++	}
++
+ 	return 0;
+ }
+ 
+@@ -1070,6 +1155,10 @@
+ 	 */
+ 	baud = uart_get_baud_rate(port, termios, old, 0, port->uartclk);//get BaudRate
+ 	quot1 = serial47xx_get_divisor(port, baud);
++	/* RS485: one byte's bits on the wire (start, data, parity, stop) */
++	up->per_byte_bit = 1 + 5 + (cval & 0x3) + ((cval & UART_LCR_PARITY) ? 1 : 0) +
++			   ((cval & UART_LCR_STOP) ? 2 : 1);
++	up->baud = baud;
+ 	/*
+ 	 * Ok, we're now changing the port state.  Do it with
+ 	 * interrupts disabled.
+@@ -1598,6 +1687,16 @@
+ 		return -ENOMEM;
+ 	}
+ 
++	up->rs485_tx_enable_gpiod = devm_gpiod_get_optional(&pdev->dev, "ingenic,rs485-tx-enable", GPIOD_OUT_LOW);
++	if (IS_ERR_OR_NULL(up->rs485_tx_enable_gpiod)) {
++		up->rs485_tx_enable_gpiod = NULL;
++	} else {
++		hrtimer_init(&up->rs485_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
++		up->rs485_timer.function = rs485_tx_timer_handler;
++		up->wait_time_ns = 0;
++		spin_lock_init(&up->wait_time_lock);
++	}
++
+ 	if (up->use_dma) {
+ 		up->buf_id = 0;
+ 

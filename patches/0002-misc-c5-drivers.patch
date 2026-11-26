@@ -1,0 +1,31 @@
+misc: build our drivers (copied in by build.sh): c5_mcu.c (/dev/mcu for the RISC-V
+core) and c5_jz_pwm.c (/dev/jz_pwm)
+
+--- a/module_drivers/drivers/misc/Kconfig
++++ b/module_drivers/drivers/misc/Kconfig
+@@ -49,3 +49,17 @@
+ 	help
+ 	Creates an rfkill entry in sysfs for power control of Bluetooth
+ 	bcm-xxxx chips.
++
++config C5_MCU
++	bool "Creator 5: /dev/mcu for the RISC-V core (soc_mcu compatible)"
++	depends on SOC_X2600
++	help
++	  Loads, starts and stops firmware on the X2600 RISC-V core with the
++	  ioctls of FlashForge's soc_mcu.ko (sep-ai uses them).
++
++config C5_JZ_PWM
++	bool "Creator 5: /dev/jz_pwm (soc_pwm compatible)"
++	depends on SOC_X2600
++	help
++	  The PWM controller with the ioctls of FlashForge's soc_pwm.ko, for
++	  cmd_pwm and Kalico's buzzer and MIDI player.
+--- a/module_drivers/drivers/misc/Makefile
++++ b/module_drivers/drivers/misc/Makefile
+@@ -5,3 +5,5 @@
+ obj-$(CONFIG_JZ_EFUSE_X2500)    += jz_efuse_x2500.o
+ obj-$(CONFIG_RMEM)      += rmem.o
+ obj-$(CONFIG_BCM_4345C5_RFKILL) += bt_power_bluesleep.o
++obj-$(CONFIG_C5_MCU)	+= c5_mcu.o
++obj-$(CONFIG_C5_JZ_PWM)	+= c5_jz_pwm.o

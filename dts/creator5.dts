@@ -1,0 +1,82 @@
+/*
+ * FlashForge Creator 5 for kernel 6.6: FlashForge's device tree (decompiled,
+ * unchanged) plus what 6.6 needs on top.
+ */
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "creator5_stock.dts"
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+
+		/*
+		 * PC11: FlashForge's /usr/prog/bin/sys_start.sh (started by
+		 * app_startup.sh) toggles it every second for as long as the printer
+		 * runs, through soc_gpio.ko's cmd_gpio, which 6.6 can't load.
+		 * The pattern trigger keeps the same square wave going.
+		 */
+		heartbeat {
+			label = "c5:heartbeat";
+			gpios = <&{/apb/pinctrl@0x13601000/gpc} 11 GPIO_ACTIVE_HIGH 0>;
+			linux,default-trigger = "pattern";
+			led-pattern = <1 1000 1 0 0 1000 0 0>;
+		};
+	};
+
+	/*
+	 * Backlight on PC14, active high (FlashForge's gpio_backlight.sh). It
+	 * follows the framebuffer's blank requests (patches/0003): GrumpyScreen's
+	 * display_sleep_sec turns the screen dark.
+	 */
+	backlight {
+		compatible = "gpio-backlight";
+		gpios = <&{/apb/pinctrl@0x13601000/gpc} 14 GPIO_ACTIVE_HIGH 0>;
+		default-on;
+	};
+};
+
+/ {
+	/*
+	 * The screen as the previous kernel left it: FlashForge's jzfb scanning out
+	 * 480x800 ARGB8888 from the start of the reserved rmem region. 6.6 has no
+	 * driver for the KX070 panel yet, so the console draws into that memory and
+	 * the controller keeps displaying it (c5-kexec.sh pans to the first buffer,
+	 * clk_ignore_unused keeps the LCD clock running).
+	 */
+	framebuffer@ec01000 {
+		compatible = "simple-framebuffer";
+		reg = <0x0ec01000 0x177000>;
+		width = <480>;
+		height = <800>;
+		stride = <1920>;
+		format = "a8r8g8b8";
+	};
+};
+
+/* 6.6's x2600.dtsi sets this on the host controller (hub: Wi-Fi, camera, CH343) */
+&{/ahb2/usb@0x13540000} {
+	disable-over-current;
+};
+
+/*
+ * Touch: Goodix GT911 on I2C bus 0 (PC00/PC01), interrupt PC07, reset PC08, as
+ * FlashForge's /module_driver/soc_i2c.sh and /usr/prog/app_startup.sh
+ * (gt9xx_touch.ko) set it up. Mainline's goodix driver only reads the chip's
+ * own 800x480 configuration; it never writes one.
+ */
+&{/apb/i2c@0x10050000} {
+	status = "okay";
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&{/apb/pinctrl@0x13601000/i2c0-pin/i2c0-pc}>;
+
+	touchscreen@14 {
+		compatible = "goodix,gt911";
+		reg = <0x14>;
+		interrupt-parent = <&{/apb/pinctrl@0x13601000/gpc}>;
+		interrupts = <7 IRQ_TYPE_EDGE_FALLING 0>;
+		irq-gpios = <&{/apb/pinctrl@0x13601000/gpc} 7 GPIO_ACTIVE_HIGH 0>;
+		reset-gpios = <&{/apb/pinctrl@0x13601000/gpc} 8 GPIO_ACTIVE_HIGH 0>;
+	};
+};

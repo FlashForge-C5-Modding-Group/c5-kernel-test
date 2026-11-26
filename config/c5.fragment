@@ -1,28 +1,85 @@
-# Stock FlashForge kernel 2.0.7 (from c5-usb-serial-modules: vermagic and exports)
-CONFIG_LOCALVERSION="+"
+# The board device tree: FlashForge's own plus 6.6 additions (dts/creator5.dts)
+# CONFIG_DT_X2600_HALLEY7 is not set
+CONFIG_DT_X2600_MODULE_BASE=y
+CONFIG_DT_X2600_MODULE_BASE_DTS_FILE="creator5.dts"
 CONFIG_HIGHMEM=y
+# Root file system: squashfs (zstd on 2.0.7+, lzo on older releases)
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZSTD=y
+CONFIG_SQUASHFS_LZO=y
+CONFIG_SQUASHFS_XZ=y
 # Swap: compressed in RAM (zram) or a swap file on /usr/data
 CONFIG_SWAP=y
 CONFIG_ZSMALLOC=y
 CONFIG_ZRAM=y
 CONFIG_CRYPTO_LZO=y
 CONFIG_CRYPTO_LZ4=y
-# Accept both legacy-NaN and 2008-NaN programs (replaces 01-fixnan.sh's devmem write)
+# ieee754=relaxed: accept both legacy-NaN and 2008-NaN programs (replaces
+# 01-fixnan.sh's devmem write). clk_ignore_unused: no 6.6 driver claims the LCD
+# clock yet (see dts/creator5.dts)
 CONFIG_CMDLINE_BOOL=y
-CONFIG_CMDLINE="ieee754=relaxed"
+CONFIG_CMDLINE="ieee754=relaxed clk_ignore_unused"
 # So the next kernel's config can be read back from /proc/config.gz
 CONFIG_IKCONFIG=y
 CONFIG_IKCONFIG_PROC=y
-# The board device tree: FlashForge's own (dts/creator5_stock.dts)
-CONFIG_DT_X2600_MODULE_BASE_DTS_FILE="creator5_stock.dts"
-# Less debug overhead. Only options that don't change structures FlashForge's
-# modules use: DEBUG_SPINLOCK (spinlock_t) and DETECT_HUNG_TASK (task_struct) stay.
+# Wi-Fi: the RTL8821CU on the internal USB hub. Its firmware is built in
+# (build.sh fetches it from linux-firmware); the root file system has none.
+CONFIG_WLAN_VENDOR_REALTEK=y
+CONFIG_RTW88=y
+CONFIG_RTW88_8821CU=y
+CONFIG_EXTRA_FIRMWARE="rtw88/rtw8821c_fw.bin"
+# No closed vendor modules on 6.6, so no structure layouts to keep
+# CONFIG_DEBUG_SPINLOCK is not set
 # CONFIG_SCHED_DEBUG is not set
 # CONFIG_DEBUG_NOTIFIERS is not set
 # Boot messages on the touchscreen: c5-kexec.sh adds console=tty0 and fbcon=rotate,
 # OpenCreator's UI scripts hand the screen back before the UI starts
 CONFIG_FRAMEBUFFER_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
-# Selects the generic drawing helpers patch 0005 gives FlashForge's jzfb, which
-# has none (no simple-framebuffer node exists, so the driver itself stays idle)
+# The screen as the previous kernel left it (dts/creator5.dts)
 CONFIG_FB_SIMPLE=y
+# Ingenic's halley7 defconfig trims the general setup; FlashForge's 5.10 has
+# these. Without FILE_LOCKING Moonraker's SQLite database reports "locked".
+CONFIG_EXPERT=y
+CONFIG_FILE_LOCKING=y
+CONFIG_AIO=y
+CONFIG_IO_URING=y
+CONFIG_ADVISE_SYSCALLS=y
+CONFIG_POSIX_MQUEUE=y
+CONFIG_SYSFS_SYSCALL=y
+CONFIG_SGETMASK_SYSCALL=y
+CONFIG_BASE_FULL=y
+CONFIG_CPU_ISOLATION=y
+CONFIG_LDISC_AUTOLOAD=y
+CONFIG_NULL_TTY=y
+CONFIG_STACKPROTECTOR=y
+CONFIG_STACKPROTECTOR_STRONG=y
+CONFIG_CRYPTO_ZSTD=y
+CONFIG_CRYPTO_DEFLATE=y
+CONFIG_SQUASHFS_COMPILE_DECOMP_MULTI_PERCPU=y
+CONFIG_SQUASHFS_4K_DEVBLK_SIZE=y
+# USB keyboards, gamepads and other HID devices
+CONFIG_USB_HID=y
+CONFIG_USB_HIDDEV=y
+CONFIG_HID_PID=y
+# halley7 hardware the printer doesn't have: Broadcom SDIO Wi-Fi (13 s of retries
+# at boot), SPI flash, Ethernet MAC, the felix video decoder (wants reserved memory)
+# CONFIG_BCMDHD is not set
+# CONFIG_INGENIC_SFC is not set
+# CONFIG_INGENIC_MAC is not set
+# CONFIG_INGENIC_FELIX is not set
+# Touch: Goodix GT911 (dts/creator5.dts)
+CONFIG_INPUT_TOUCHSCREEN=y
+CONFIG_TOUCHSCREEN_GOODIX=y
+# /dev/mcu for the RISC-V core, soc_mcu compatible (drivers/c5_mcu.c), for sep-ai
+CONFIG_C5_MCU=y
+# /dev/jz_pwm, soc_pwm compatible (drivers/c5_jz_pwm.c): cmd_pwm, Kalico's buzzer
+# and MIDI. It owns the PWM controller, so Ingenic's PWM driver stays out.
+CONFIG_C5_JZ_PWM=y
+# CONFIG_PWM_INGENIC_V3 is not set
+# PC11 heartbeat as FlashForge's sys_start.sh does it (dts/creator5.dts)
+CONFIG_NEW_LEDS=y
+CONFIG_LEDS_CLASS=y
+CONFIG_LEDS_GPIO=y
+CONFIG_LEDS_TRIGGERS=y
+CONFIG_LEDS_TRIGGER_PATTERN=y
