@@ -13,8 +13,9 @@ is built from). It adds what FlashForge's kernel leaves out:
 - usb-serial and USB Ethernet built in (see
   [c5-usb-serial-modules](https://github.com/FlashForge-C5-Modding-Group/c5-usb-serial-modules)).
 
-**Untested on a printer.** Flashing a kernel can leave the printer unable to
-boot; the way back is Ingenic's USB flasher over the mainboard's ports.
+**Experimental.** It has been booted once on a printer (through `kexec/`,
+below), not flashed. Flashing a kernel can leave the printer unable to boot;
+the way back is Ingenic's USB flasher over the mainboard's ports.
 
 ## How it matches FlashForge's kernel
 
@@ -74,6 +75,51 @@ with the defconfig and every fragment (and stops if `olddefconfig` drops an
 option), and builds into `$OUT` (`~/c5-kernel-out`). The image is
 `arch/mips/boot/compressed/xImage`: a U-Boot uImage with load and entry
 address `0x80F00000`, the same format as FlashForge's `xImage`.
+
+## Booting it without flashing (`kexec/`), experimental
+
+> [!WARNING]
+> **Don't try this on your printer.** It's a proof of concept that has run on
+> one printer. If the jump goes wrong the printer can freeze and need a power
+> cycle, a running print is lost, and a bug in the module can crash the stock
+> kernel. It only works on FlashForge kernel package 2.0.7.
+
+FlashForge's kernel has no kexec (`sys_kexec_load` is an empty stub), so
+`kexec/c5_kexec.ko` adds it for kernel 2.0.7 as a module. It boots another
+kernel image from the running stock one, in RAM only: nothing on the eMMC
+changes, and any reboot or power cycle boots stock again.
+
+- **Dry run by default:** `c5-kexec.sh IMAGE` loads the module without `go`. It
+  checks it's on kernel 2.0.7 (it calls unexported kernel functions at that
+  kernel's addresses and refuses anywhere else), checks the uImage header and
+  CRCs, stages the image in pages above 32 MB, logs the cache sizes and command
+  line, then frees everything.
+- **`c5-kexec.sh --go IMAGE`:** refuses during a print, syncs, takes the second
+  core offline (Ingenic's SMP code then holds it in reset), shuts the drivers
+  down as a reboot does (`kernel_restart_prepare`) and runs
+  `c5_kexec_tramp.S` uncached: it copies the image to its load address, writes
+  back and invalidates the L1 and L2 caches and jumps in with the current
+  command line, as U-Boot would. The new kernel starts the second core itself.
+- If the new kernel panics it reboots into stock after 10 s; if it hangs, it
+  needs a power cycle.
+
+Tested once with this repository's v5.0 build: both cores, all FlashForge
+modules, Wi-Fi, screen, camera and Klipper (all MCUs) came up, and zram swap
+worked. Not tested: the VDS dryer (RS485), USB devices, printing.
+
+Known problem: OpenCreator's `01-fixnan.sh` writes a byte into kernel memory at
+an address meant for the stock kernel, chosen by kernel package; on the new
+kernel it lands in a dynamic-debug descriptor. It needs to skip custom kernels
+(`/proc/config.gz`), which already have `ieee754=relaxed`.
+
+Build (against a kernel tree configured like stock 2.0.7: the SDK v2.0
+defconfig with `CONFIG_HIGHMEM=y` and `CONFIG_LOCALVERSION="+"`, then
+`make modules_prepare`):
+
+```sh
+make -C /path/to/kernel-5.10 O=/path/to/stock-config-tree M=$PWD/kexec \
+     ARCH=mips CROSS_COMPILE=mips-xburst2-linux-gnu- modules
+```
 
 ## License
 
