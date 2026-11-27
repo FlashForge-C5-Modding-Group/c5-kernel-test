@@ -1,0 +1,13 @@
+--- a/block/partitions/efi.c
++++ b/block/partitions/efi.c
+@@ -404,7 +404,9 @@
+ 		pr_debug("GPT: last_usable_lba incorrect: %lld > %lld\n",
+ 			 (unsigned long long)le64_to_cpu((*gpt)->last_usable_lba),
+ 			 (unsigned long long)lastlba);
+-		goto fail;
++#ifndef CONFIG_INGENIC_GPT_CHECK
++		goto fail;
++#endif
+ 	}
+ 	if (le64_to_cpu((*gpt)->last_usable_lba) < le64_to_cpu((*gpt)->first_usable_lba)) {
+ 		pr_debug("GPT: last_usable_lba incorrect: %lld > %lld\n",
