@@ -178,13 +178,18 @@ kernel's picture through simple-framebuffer:
   otherwise reaches the handler before its wait queue exists (a panic with a
   blank screen). **`0009`** pads lines for the rotator only when rotating:
   padded to 2048 bytes, they didn't match the 480-pixel lines the controller
-  reads, and the picture was sheared.
+  reads, and the picture was sheared. **`0010`** sets up the composer's frame
+  lists even with the composer off: the driver walks them every time the
+  screen blanks, and with them never set up, screen sleep oopsed in
+  `dpu_ctrl_suspend` (the screen stayed lit but blank and the screen program
+  hung).
 - The layer composer stays off (`composer-support` is deleted from the
   device tree), as in FlashForge's `soc_fb` setup.
 
 Tested through kexec from the stock kernel: boot messages, GrumpyScreen and
 Sonic Mania (copying a frame out takes about 3 ms instead of 38 ms through
-simple-framebuffer's uncached mapping). Not tested: a cold boot into 6.6.
+simple-framebuffer's uncached mapping). Not tested: a cold boot into 6.6, and
+screen sleep since the `0010` fix.
 
 ## eMMC on kernel 6.6
 

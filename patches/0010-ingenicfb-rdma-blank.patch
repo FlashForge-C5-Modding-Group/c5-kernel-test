@@ -1,0 +1,18 @@
+ingenicfb: initialise the composer frame lists in rdma mode too. They were
+only set up with composer-support, but dpu_ctrl_suspend() walks them at every
+blank, so blanking the rdma framebuffer (Creator 5, no composer) dereferenced
+a zeroed list and oopsed in dpu_ctrl_suspend.
+
+--- a/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/dpu_ctrl.c
++++ b/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/dpu_ctrl.c
+@@ -2986,6 +2986,10 @@
+ 		goto err_rdma_desc;
+ 	}
+ 
++	/* dpu_ctrl_suspend() walks these at every blank, in rdma mode too */
++	INIT_LIST_HEAD(&dctrl->comp_desc_queued_list);
++	INIT_LIST_HEAD(&dctrl->comp_desc_done_list);
++
+ 	if (dctrl->support_comp) {
+ 		ret = dpu_ctrl_alloc_comp_desc(dctrl);
+ 		if (ret < 0) {
