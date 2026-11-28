@@ -157,6 +157,44 @@ make -C /path/to/kernel-5.10 O=/path/to/stock-config-tree M=$PWD/kexec \
      ARCH=mips CROSS_COMPILE=mips-xburst2-linux-gnu- modules
 ```
 
+## Display on kernel 6.6
+
+The 6.6 build drives the touchscreen itself with Ingenic's framebuffer driver
+(`ingenicfb`, `fb_stage_wip` in the SDK) instead of keeping the previous
+kernel's picture through simple-framebuffer:
+
+- **Panel:** the KX070 is a 480x800 LVDS panel, 24-bit, VESA mapping, with no
+  reset, power or init commands (FlashForge's `lcd_kx070.ko` has none).
+  `drivers/panel-kx070.c` has the timings FlashForge's kernel programs into the
+  display controller, read back from a running printer: horizontal sync, back
+  and front porch 20/40/40, vertical 8/17/70, 31 MHz pixel clock (EPLL 434 MHz
+  / 14), about 59.7 Hz. `panel_kx070.jeida=1` on the command line switches to
+  the JEIDA mapping.
+- **Framebuffer:** `/dev/fb0`, 480x800, 32 bpp, two pages (480x1600) for page
+  flipping, mapped cached for programs as FlashForge's driver does.
+- **`patches/0007`** builds the panel. **`0008`** masks the controller's
+  interrupts before the driver requests its IRQ: after kexec the controller
+  still runs the previous kernel's setup, and its end-of-frame interrupt
+  otherwise reaches the handler before its wait queue exists (a panic with a
+  blank screen). **`0009`** pads lines for the rotator only when rotating:
+  padded to 2048 bytes, they didn't match the 480-pixel lines the controller
+  reads, and the picture was sheared.
+- The layer composer stays off (`composer-support` is deleted from the
+  device tree), as in FlashForge's `soc_fb` setup.
+
+Tested through kexec from the stock kernel: boot messages, GrumpyScreen and
+Sonic Mania (copying a frame out takes about 3 ms instead of 38 ms through
+simple-framebuffer's uncached mapping). Not tested: a cold boot into 6.6.
+
+## eMMC on kernel 6.6
+
+FlashForge's device tree caps the eMMC at 25 MHz (8-bit, HS200); the 6.6 device
+tree raises it to 100 MHz, what Ingenic's `x2600_module_base` board runs the
+same setup at. Measured through kexec: uncached reads went from about 21 MB/s
+to 64 MB/s, a file written, synced and read back matched, and no CRC, timeout
+or I/O errors were logged. Writes (about 9 MB/s) are limited by the flash, not
+the bus. The bus clock doesn't change wear, which depends on what is written.
+
 ## License
 
 GPL-2.0, as the Linux kernel ([LICENSE](LICENSE)).

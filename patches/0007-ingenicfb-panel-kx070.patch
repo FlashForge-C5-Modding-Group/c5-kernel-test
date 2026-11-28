@@ -1,0 +1,28 @@
+ingenicfb: build the Creator 5's KX070 LVDS panel (drivers/panel-kx070.c,
+copied in by build.sh)
+
+--- a/module_drivers/drivers/video/fbdev/ingenic/displays/Kconfig
++++ b/module_drivers/drivers/video/fbdev/ingenic/displays/Kconfig
+@@ -210,6 +210,12 @@
+ 	help
+ 		lcd panel lvds hc070ik25, for ingenicfb drivers.
+ 
++config STAGE_KX070
++	bool "lvds lcd kx070 480x800 (FlashForge Creator 5)"
++	depends on FB_INGENIC_DISPLAYS_STAGE
++	help
++		The Creator 5's LVDS panel, for ingenicfb drivers.
++
+ config STAGE_HC101I35
+ 	tristate "lvds lcd hc101i35 1280x800"
+ 	depends on FB_INGENIC_DISPLAYS_STAGE
+--- a/module_drivers/drivers/video/fbdev/ingenic/displays/Makefile
++++ b/module_drivers/drivers/video/fbdev/ingenic/displays/Makefile
+@@ -30,6 +30,7 @@
+ obj-$(CONFIG_STAGE_ATK7016) += panel-atk7016.o
+ obj-$(CONFIG_STAGE_HC050IG40031) += panel-hc050ig40031.o
+ obj-$(CONFIG_STAGE_HC070IK25) += panel-hc070ik25.o
++obj-$(CONFIG_STAGE_KX070) += panel-kx070.o
+ obj-$(CONFIG_STAGE_HC101I35) += panel-hc101i35.o
+ obj-$(CONFIG_STAGE_KD055FHFID018B) += panel-kd055fhfid018b.o
+ obj-$(CONFIG_STAGE_YH_101BJ3001N0_01A00_PM0) += panel-YH-101BJ3001N0-01A00-PM0.o

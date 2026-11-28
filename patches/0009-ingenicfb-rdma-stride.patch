@@ -1,0 +1,46 @@
+ingenicfb: pad framebuffer lines for the rotator only when rotating. The
+rdma framebuffer (never rotated) reads lines of xres pixels, so padded lines
+(480x4 to 2048 bytes) sheared every line on the Creator 5's 480-wide panel.
+
+--- a/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/ingenicfb.c
++++ b/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/ingenicfb.c
+@@ -714,7 +714,8 @@
+ 	fbdev->vidmem_size = 0;
+ 
+ 	linesize = (x_res * bits_per_pixel) >> 3;
+-	linesize = rotator_aligned_size(linesize);
++	if (fbdev->rot_angle)
++		linesize = rotator_aligned_size(linesize);
+ 
+ 	alloc_size = linesize * y_res;
+ 	fbdev->frm_size = alloc_size;
+@@ -770,7 +771,8 @@
+ 	}
+ 
+ 	linesize = (info->var.bits_per_pixel * info->var.xres) >> 3;
+-	linesize = rotator_aligned_size(linesize);
++	if (fbdev->rot_angle)
++		linesize = rotator_aligned_size(linesize);
+ 	info->fix = ingenicfb_fix;
+ 	info->fix.line_length = linesize;
+ 	info->fix.smem_start = fbdev->vidmem_phys[0];
+@@ -1177,7 +1179,8 @@
+ 
+ 	fbdev->vidmem_size = 0;
+ 	linesize = (x_res * bits_per_pixel) >> 3;
+-	linesize = rotator_aligned_size(linesize);
++	if (fbdev->rot_angle)
++		linesize = rotator_aligned_size(linesize);
+ 
+ 	alloc_size = linesize * y_res;
+ 	fbdev->frm_size = alloc_size;
+@@ -1427,7 +1430,8 @@
+ 			dev_err(&pdev->dev, "Failed to allocate video memory\n");
+ 			goto err_alloc_vidmem;
+ 		}
+-		linesize = rotator_aligned_size(linesize);
++		if (fbdev->rot_angle)
++			linesize = rotator_aligned_size(linesize);
+ 		fb->fix = ingenicfb_fix;
+ 		fb->fix.line_length = linesize;
+ 		fb->fix.smem_start = fbdev->vidmem_phys[0];

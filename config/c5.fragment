@@ -15,8 +15,8 @@ CONFIG_ZRAM=y
 CONFIG_CRYPTO_LZO=y
 CONFIG_CRYPTO_LZ4=y
 # ieee754=relaxed: accept both legacy-NaN and 2008-NaN programs (replaces
-# 01-fixnan.sh's devmem write). clk_ignore_unused: no 6.6 driver claims the LCD
-# clock yet (see dts/creator5.dts)
+# 01-fixnan.sh's devmem write). clk_ignore_unused: clocks no 6.6 driver claims
+# stay as the previous kernel left them
 CONFIG_CMDLINE_BOOL=y
 CONFIG_CMDLINE="ieee754=relaxed clk_ignore_unused"
 # So the next kernel's config can be read back from /proc/config.gz
@@ -39,8 +39,17 @@ CONFIG_EXTRA_FIRMWARE="rtw88/rtw8821c_fw.bin"
 # OpenCreator's UI scripts hand the screen back before the UI starts
 CONFIG_FRAMEBUFFER_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
-# The screen as the previous kernel left it (dts/creator5.dts)
-CONFIG_FB_SIMPLE=y
+# The display: Ingenic's framebuffer driver with the KX070 LVDS panel
+# (drivers/panel-kx070.c, dts/creator5.dts). Two pages, for page flipping.
+CONFIG_FB_INGENIC=y
+CONFIG_FB_INGENIC_STAGE_WIP=y
+CONFIG_FB_INGENIC_DISPLAYS_STAGE=y
+CONFIG_FB_INGENIC_NR_FRAMES=2
+CONFIG_STAGE_KX070=y
+# halley7's panels, and Ingenic's logo over the boot messages
+# CONFIG_STAGE_FW050 is not set
+# CONFIG_STAGE_ZC50289HSHD02 is not set
+# CONFIG_TRUE_COLOR_LOGO is not set
 # Ingenic's halley7 defconfig trims the general setup; FlashForge's 5.10 has
 # these. Without FILE_LOCKING Moonraker's SQLite database reports "locked".
 CONFIG_EXPERT=y

@@ -26,7 +26,7 @@
 
 	/*
 	 * Backlight on PC14, active high (FlashForge's gpio_backlight.sh). It
-	 * follows the framebuffer's blank requests (patches/0003): GrumpyScreen's
+	 * follows the framebuffer's blank requests: GrumpyScreen's
 	 * display_sleep_sec turns the screen dark.
 	 */
 	backlight {
@@ -37,26 +37,34 @@
 };
 
 / {
-	/*
-	 * The screen as the previous kernel left it: FlashForge's jzfb scanning out
-	 * 480x800 ARGB8888 from the start of the reserved rmem region. 6.6 has no
-	 * driver for the KX070 panel yet, so the console draws into that memory and
-	 * the controller keeps displaying it (c5-kexec.sh pans to the first buffer,
-	 * clk_ignore_unused keeps the LCD clock running).
-	 */
-	framebuffer@ec01000 {
-		compatible = "simple-framebuffer";
-		reg = <0x0ec01000 0x177000>;
-		width = <480>;
-		height = <800>;
-		stride = <1920>;
-		format = "a8r8g8b8";
+	/* The KX070 LVDS panel (drivers/panel-kx070.c) */
+	panel-kx070 {
+		compatible = "flashforge,kx070";
 	};
+};
+
+/*
+ * Ingenic's framebuffer driver (ingenicfb) drives the panel. FlashForge's
+ * soc_fb runs without the layer composer, so this does too.
+ */
+&{/ahb0/dpu@0x13050000} {
+	status = "okay";
+	ingenic,rot_angle = <0>;
+	/delete-property/ composer-support;
 };
 
 /* 6.6's x2600.dtsi sets this on the host controller (hub: Wi-Fi, camera, CH343) */
 &{/ahb2/usb@0x13540000} {
 	disable-over-current;
+};
+
+/*
+ * eMMC: FlashForge caps it at 25 MHz, a fifth of what Ingenic's module_base
+ * board runs the same 8-bit HS200 setup at (100 MHz). At 25 MHz it reads about
+ * 21 MB/s.
+ */
+&{/ahb2/msc@0x13450000} {
+	max-frequency = <100000000>;
 };
 
 /*

@@ -74,9 +74,6 @@ echo "c5-kexec: booting $IMAGE"
 sync
 echo 0 > /sys/devices/system/cpu/cpu1/online
 sync
-# Show the first of the framebuffer's buffers: a kernel without a driver for the
-# panel (6.6) draws its console there through simple-framebuffer
-echo 0,0 > /sys/class/graphics/fb0/pan 2>/dev/null || true
 insmod "$MOD" image="$IMAGE" cmdline="$CMDLINE" printk_addr="$PRINTK" kallsyms_addr="$KALLSYMS" go=1
 # Only reached if the module refused: bring the second core back
 echo 1 > /sys/devices/system/cpu/cpu1/online

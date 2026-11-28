@@ -45,6 +45,7 @@ done
 cp "$HERE/dts/creator5_stock.dts" "$HERE/dts/creator5.dts" "$KSRC/module_drivers/dts/"
 # Drivers of our own (hooked into Kconfig/Makefile by patches/)
 cp "$HERE"/drivers/c5_mcu.c "$HERE"/drivers/c5_jz_pwm.c "$KSRC/module_drivers/drivers/misc/"
+cp "$HERE"/drivers/panel-kx070.c "$KSRC/module_drivers/drivers/video/fbdev/ingenic/displays/"
 
 export PATH=$TC/bin:$PATH ARCH=mips CROSS_COMPILE=$CROSS
 mkdir -p "$OUT"

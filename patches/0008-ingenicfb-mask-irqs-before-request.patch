@@ -1,0 +1,21 @@
+ingenicfb: mask and clear the display controller's interrupts before
+requesting its IRQ, so a controller left running by the previous kernel
+(kexec) can't call the handler before its wait queue exists
+
+--- a/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/dpu_ctrl.c
++++ b/module_drivers/drivers/video/fbdev/ingenic/fb_stage_wip/dpu_ctrl.c
+@@ -2953,6 +2953,14 @@
+ 		goto err_put_clk;
+ 	}
+ 
++	/*
++	 * After kexec the controller still runs the previous kernel's setup, and
++	 * its end-of-frame interrupt would reach the handler before dctrl->wq is
++	 * set up. Mask and clear everything; the hardware init enables them again.
++	 */
++	reg_write(dctrl, DC_INTC, 0);
++	reg_write(dctrl, DC_CLR_ST, 0x01FFFFFE);
++
+ 	dctrl->irq = platform_get_irq(dctrl->pdev, 0);
+ 	sprintf(dctrl->irq_name, "lcdc%d", dctrl->pdev->id);
+ 	if (devm_request_irq(dctrl->dev, dctrl->irq, dpu_ctrl_irq_handler, 0,
